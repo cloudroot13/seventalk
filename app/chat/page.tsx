@@ -30,12 +30,13 @@ export default function ChatPage() {
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const previousOnlineUsersRef = useRef<string[]>([]);
+  const hasInitializedRef = useRef(false); // 🔥 NOVO: Previne múltiplas inicializações
   const router = useRouter();
 
   // API base URL - FIXO para evitar recriações
   const API_URL = typeof window !== 'undefined' ? window.location.origin : '';
 
-  // Função para buscar mensagens
+  // 🔥 CORREÇÃO: fetchMessages SEM messages nas dependências
   const fetchMessages = useCallback(async () => {
     try {
       const response = await fetch(`${API_URL}/api/chat`, {
@@ -48,10 +49,8 @@ export default function ChatPage() {
       if (response.ok) {
         const data = await response.json();
         
-        // Atualizar mensagens
-        if (JSON.stringify(data.messages || []) !== JSON.stringify(messages)) {
-          setMessages(data.messages || []);
-        }
+        // 🔥 ATUALIZA SEMPRE (sem comparação que causa re-render)
+        setMessages(data.messages || []);
         
         // Atualizar usuários online apenas se mudou
         const newOnlineUsers = data.onlineUsers || [];
@@ -68,11 +67,14 @@ export default function ChatPage() {
       console.error('Error fetching messages:', error);
       setIsConnected(false);
     }
-  }, [API_URL, messages]);
+  }, [API_URL]); // 🔥 APENAS API_URL como dependência!
 
   // Adicionar usuário online - APENAS UMA VEZ
   const addOnlineUser = useCallback(async (username: string) => {
-    if (hasAddedUser) return; // Evita chamadas múltiplas
+    if (hasAddedUser) {
+      console.log('⏭️ Usuário já adicionado, pulando:', username);
+      return;
+    }
     
     try {
       await fetch(`${API_URL}/api/chat`, {
@@ -139,7 +141,11 @@ export default function ChatPage() {
     }
   }, [API_URL]);
 
+  // 🔥 CORREÇÃO: useEffect SIMPLIFICADO e sem loop
   useEffect(() => {
+    // Evitar múltiplas inicializações
+    if (hasInitializedRef.current) return;
+    
     const userData = sessionStorage.getItem('user');
     if (!userData) {
       router.push('/');
@@ -148,33 +154,47 @@ export default function ChatPage() {
     
     const parsedUser = JSON.parse(userData);
     setUser(parsedUser);
-
+    
     console.log('🔄 Iniciando chat para usuário:', parsedUser.username);
+    hasInitializedRef.current = true;
 
-    // Buscar mensagens iniciais
+    // 1. Buscar mensagens iniciais
     fetchMessages();
     
-    // Adicionar usuário online (apenas uma vez)
+    // 2. Adicionar usuário online (APENAS UMA VEZ)
     if (parsedUser.username && !hasAddedUser) {
       addOnlineUser(parsedUser.username);
     }
 
-    // Polling para novas mensagens (apenas 2 segundos)
+    // 3. Polling para novas mensagens
     pollIntervalRef.current = setInterval(fetchMessages, 2000);
+
+    // 4. Verificação de conexão separada
+    const connectionCheck = setInterval(() => {
+      fetch(`${API_URL}/api/chat`)
+        .then(res => setIsConnected(res.ok))
+        .catch(() => setIsConnected(false));
+    }, 10000);
 
     return () => {
       console.log('🧹 Limpando recursos do chat');
+      
       if (pollIntervalRef.current) {
         clearInterval(pollIntervalRef.current);
         pollIntervalRef.current = null;
       }
       
+      clearInterval(connectionCheck);
+      
       // Remover usuário online APENAS no unmount
       if (parsedUser.username && hasAddedUser) {
+        console.log('🚪 Removendo usuário no cleanup:', parsedUser.username);
         removeOnlineUser(parsedUser.username);
       }
+      
+      hasInitializedRef.current = false;
     };
-  }, [router, fetchMessages, addOnlineUser, removeOnlineUser, hasAddedUser]);
+  }, [router, API_URL]); // 🔥 DEPENDÊNCIAS MÍNIMAS!
 
   // Scroll automático para última mensagem
   const scrollToBottom = useCallback(() => {
@@ -193,26 +213,6 @@ export default function ChatPage() {
     }
   }, [messages, scrollToBottom]);
 
-  // Função para detectar se o usuário está perto do final
-  const isNearBottom = () => {
-    if (!messagesContainerRef.current) return true;
-    
-    const container = messagesContainerRef.current;
-    const scrollTop = container.scrollTop;
-    const scrollHeight = container.scrollHeight;
-    const clientHeight = container.clientHeight;
-    
-    // Se estiver a 100px do final, considera "perto do final"
-    return scrollHeight - scrollTop - clientHeight < 100;
-  };
-
-  // Auto-scroll apenas se o usuário já estava perto do final
-  useEffect(() => {
-    if (messages.length > 0 && isNearBottom()) {
-      scrollToBottom();
-    }
-  }, [messages, scrollToBottom]);
-
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!input.trim() || !user || isSending) return;
@@ -221,12 +221,19 @@ export default function ChatPage() {
     const messageText = input.trim();
     setInput('');
 
+    console.log('✉️ Enviando mensagem:', { user: user.username, text: messageText });
+    
     const success = await sendMessage(messageText, user.username);
     
     if (success) {
-      // Aguardar um pouco antes de buscar para garantir que a mensagem foi salva
-      setTimeout(fetchMessages, 300);
+      console.log('✅ Mensagem enviada com sucesso');
+      // 🔥 Atualizar mensagens IMEDIATAMENTE após envio
+      setTimeout(() => {
+        fetchMessages();
+        console.log('🔄 Mensagens atualizadas após envio');
+      }, 100);
     } else {
+      console.error('❌ Falha ao enviar mensagem');
       const errorMsg: Message = {
         id: Date.now(),
         text: "Failed to send message. Please try again.",
@@ -241,7 +248,7 @@ export default function ChatPage() {
   };
 
   const handleLogout = () => {
-    console.log('👋 Logout solicitado');
+    console.log('👋 Logout solicitado para:', user?.username);
     if (user && hasAddedUser) {
       removeOnlineUser(user.username);
     }
@@ -256,6 +263,7 @@ export default function ChatPage() {
     }
     
     try {
+      console.log('🧹 Solicitando limpeza do chat');
       await fetch(`${API_URL}/api/chat`, {
         method: 'POST',
         headers: { 
@@ -265,6 +273,7 @@ export default function ChatPage() {
         body: JSON.stringify({ action: 'clear_chat' })
       });
       await fetchMessages();
+      console.log('✅ Chat limpo com sucesso');
     } catch (error) {
       console.error('Error clearing chat:', error);
     }
