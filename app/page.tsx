@@ -6,8 +6,8 @@ import BinaryBackground from '@/src/components/BinaryBackground';
 
 // No app/page.tsx, atualize ALLOWED_USERS:
 const ALLOWED_USERS = [
-  { username: "pazzyne", password: "suaSenha123", role: "admin" },
-  { username: "Amigo1", password: "amigo123", role: "user" },
+  { username: "pazzyne", password: "1Li3ycKlfu", role: "admin" },
+  { username: "flux", password: "TwxGOr:064", role: "user" },
   { username: "Anonymous", password: "opwh7js8f2", role: "anonymous" }
 ];
 
