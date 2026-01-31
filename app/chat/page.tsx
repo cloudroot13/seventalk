@@ -25,61 +25,89 @@ export default function ChatPage() {
   const [onlineUsers, setOnlineUsers] = useState<string[]>([]);
   const [isConnected, setIsConnected] = useState(true);
   const [isSending, setIsSending] = useState(false);
+  const [hasAddedUser, setHasAddedUser] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const previousOnlineUsersRef = useRef<string[]>([]);
   const router = useRouter();
 
-  // API base URL
+  // API base URL - FIXO para evitar recriações
   const API_URL = typeof window !== 'undefined' ? window.location.origin : '';
 
   // Função para buscar mensagens
   const fetchMessages = useCallback(async () => {
     try {
-      const response = await fetch(`${API_URL}/api/chat`);
+      const response = await fetch(`${API_URL}/api/chat`, {
+        cache: 'no-store',
+        headers: {
+          'Cache-Control': 'no-cache'
+        }
+      });
+      
       if (response.ok) {
         const data = await response.json();
-        setMessages(data.messages || []);
         
+        // Atualizar mensagens
+        if (JSON.stringify(data.messages || []) !== JSON.stringify(messages)) {
+          setMessages(data.messages || []);
+        }
+        
+        // Atualizar usuários online apenas se mudou
         const newOnlineUsers = data.onlineUsers || [];
-        previousOnlineUsersRef.current = newOnlineUsers;
-        setOnlineUsers(newOnlineUsers);
+        if (JSON.stringify(newOnlineUsers) !== JSON.stringify(previousOnlineUsersRef.current)) {
+          setOnlineUsers(newOnlineUsers);
+          previousOnlineUsersRef.current = newOnlineUsers;
+        }
         
         setIsConnected(true);
+      } else {
+        setIsConnected(false);
       }
     } catch (error) {
       console.error('Error fetching messages:', error);
       setIsConnected(false);
     }
-  }, [API_URL]);
+  }, [API_URL, messages]); // Adicionado messages como dependência
 
-  // Adicionar usuário online
+  // Adicionar usuário online - APENAS UMA VEZ
   const addOnlineUser = useCallback(async (username: string) => {
+    if (hasAddedUser) return; // Evita chamadas múltiplas
+    
     try {
       await fetch(`${API_URL}/api/chat`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Cache-Control': 'no-cache'
+        },
         body: JSON.stringify({
           action: 'add_online_user',
           data: { username }
         })
       });
+      setHasAddedUser(true);
+      console.log('✅ Usuário adicionado online:', username);
     } catch (error) {
       console.error('Error adding online user:', error);
     }
-  }, [API_URL]);
+  }, [API_URL, hasAddedUser]);
 
   // Remover usuário online
   const removeOnlineUser = useCallback(async (username: string) => {
     try {
       await fetch(`${API_URL}/api/chat`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Cache-Control': 'no-cache'
+        },
         body: JSON.stringify({
           action: 'remove_online_user',
           data: { username }
         })
       });
+      setHasAddedUser(false);
+      console.log('✅ Usuário removido online:', username);
     } catch (error) {
       console.error('Error removing online user:', error);
     }
@@ -90,7 +118,10 @@ export default function ChatPage() {
     try {
       const response = await fetch(`${API_URL}/api/chat`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Cache-Control': 'no-cache'
+        },
         body: JSON.stringify({
           action: 'send_message',
           data: {
@@ -117,30 +148,43 @@ export default function ChatPage() {
     const parsedUser = JSON.parse(userData);
     setUser(parsedUser);
 
-    fetchMessages();
-    addOnlineUser(parsedUser.username);
+    console.log('🔄 Iniciando chat para usuário:', parsedUser.username);
 
+    // Buscar mensagens iniciais
+    fetchMessages();
+    
+    // Adicionar usuário online (apenas uma vez)
+    if (parsedUser.username && !hasAddedUser) {
+      addOnlineUser(parsedUser.username);
+    }
+
+    // Polling para novas mensagens (apenas 2 segundos)
     pollIntervalRef.current = setInterval(fetchMessages, 2000);
 
-    const connectionInterval = setInterval(() => {
-      fetchMessages();
-    }, 10000);
-
     return () => {
+      console.log('🧹 Limpando recursos do chat');
       if (pollIntervalRef.current) {
         clearInterval(pollIntervalRef.current);
+        pollIntervalRef.current = null;
       }
-      clearInterval(connectionInterval);
       
-      if (parsedUser) {
+      // Remover usuário online APENAS no unmount
+      if (parsedUser.username && hasAddedUser) {
         removeOnlineUser(parsedUser.username);
       }
     };
-  }, [router, fetchMessages, addOnlineUser, removeOnlineUser]);
+  }, [router, fetchMessages, addOnlineUser, removeOnlineUser, hasAddedUser]);
 
   // Scroll para última mensagem
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (messages.length > 0) {
+      setTimeout(() => {
+        messagesEndRef.current?.scrollIntoView({ 
+          behavior: 'smooth',
+          block: 'end'
+        });
+      }, 100);
+    }
   }, [messages]);
 
   const handleSendMessage = async (e: React.FormEvent) => {
@@ -154,7 +198,8 @@ export default function ChatPage() {
     const success = await sendMessage(messageText, user.username);
     
     if (success) {
-      await fetchMessages();
+      // Aguardar um pouco antes de buscar para garantir que a mensagem foi salva
+      setTimeout(fetchMessages, 300);
     } else {
       const errorMsg: Message = {
         id: Date.now(),
@@ -170,10 +215,12 @@ export default function ChatPage() {
   };
 
   const handleLogout = () => {
-    if (user) {
+    console.log('👋 Logout solicitado');
+    if (user && hasAddedUser) {
       removeOnlineUser(user.username);
     }
     sessionStorage.removeItem('user');
+    localStorage.removeItem('lastLoggedUser');
     router.push('/');
   };
 
@@ -181,7 +228,10 @@ export default function ChatPage() {
     try {
       await fetch(`${API_URL}/api/chat`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Cache-Control': 'no-cache'
+        },
         body: JSON.stringify({ action: 'clear_chat' })
       });
       await fetchMessages();
@@ -207,20 +257,18 @@ export default function ChatPage() {
         <div className="max-w-7xl mx-auto px-2 xs:px-3 sm:px-4 md:px-6 py-2 xs:py-3 sm:py-4">
           <div className="flex flex-col xs:flex-row items-start xs:items-center justify-between gap-2 xs:gap-3">
             <div className="flex items-center gap-2 xs:gap-3 w-full xs:w-auto">
-              {/* Logo - Tamanhos diferentes para cada dispositivo */}
+              {/* Logo */}
               <div className="w-7 h-7 xs:w-8 xs:h-8 sm:w-9 sm:h-9 md:w-10 md:h-10 bg-linear-to-br from-gray-900 to-black rounded-lg xs:rounded-xl flex items-center justify-center border border-gray-800 flex-shrink-0">
                 <span className="text-gradient font-bold text-xs xs:text-sm sm:text-base md:text-lg">01</span>
               </div>
               
               <div className="flex-1 min-w-0">
-                {/* Título - Tamanhos responsivos */}
                 <h1 className="text-base xs:text-lg sm:text-xl md:text-2xl font-bold text-white truncate">
                   Cypher Chat
                 </h1>
-                {/* Subtítulo - Responsivo */}
                 <div className="flex items-center gap-1 xs:gap-2">
                   <p className="text-gray-400 text-[10px] xs:text-xs sm:text-sm truncate">
-                    Secure • Private • Real-time
+                    {user.username} • {user.role}
                   </p>
                   <div className={`w-1.5 h-1.5 xs:w-2 xs:h-2 rounded-full ${isConnected ? 'bg-emerald-500 animate-pulse' : 'bg-red-500'}`}></div>
                 </div>
@@ -228,7 +276,7 @@ export default function ChatPage() {
             </div>
             
             <div className="flex items-center justify-between xs:justify-end gap-2 w-full xs:w-auto mt-1 xs:mt-0">
-              {/* Online users badge - Responsivo */}
+              {/* Online users badge */}
               <div className="flex items-center gap-1 xs:gap-2 px-2 xs:px-3 py-1 bg-gray-900/50 rounded-full border border-gray-800">
                 <div className="w-1.5 h-1.5 xs:w-2 xs:h-2 bg-emerald-500 rounded-full animate-pulse"></div>
                 <span className="text-[10px] xs:text-xs text-gray-400 whitespace-nowrap">
@@ -236,7 +284,7 @@ export default function ChatPage() {
                 </span>
               </div>
               
-              {/* Botões - Responsivos com ícones/ texto */}
+              {/* Botões */}
               <div className="flex items-center gap-1 xs:gap-2">
                 <button
                   onClick={handleClearChat}
@@ -262,17 +310,20 @@ export default function ChatPage() {
 
       <main className="max-w-7xl mx-auto px-1 xs:px-2 sm:px-3 md:px-4 pb-4 sm:pb-6 md:pb-8">
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-3 xs:gap-4 sm:gap-5 md:gap-6">
-          {/* CHAT PRINCIPAL - Responsivo para todos */}
+          {/* CHAT PRINCIPAL */}
           <div className="lg:col-span-3">
-            <div className="glass-card h-[calc(100vh-140px)] xs:h-[calc(100vh-150px)] sm:h-[calc(100vh-160px)] md:h-[calc(100vh-180px)] flex flex-col">
-              {/* Área de mensagens */}
-              <div className="flex-1 overflow-y-auto p-2 xs:p-3 sm:p-4 md:p-6">
+            <div className="glass-card h-[calc(100vh-140px)] xs:h-[calc(100vh-150px)] sm:h-[calc(100vh-160px)] md:h-[calc(100vh-180px)] flex flex-col overflow-hidden">
+              {/* Área de mensagens - FIXADO O SCROLL */}
+              <div className="flex-1 overflow-y-auto p-2 xs:p-3 sm:p-4 md:p-6 touch-auto" 
+                   style={{ WebkitOverflowScrolling: 'touch' }}>
                 {messages.length === 0 ? (
                   <div className="text-center py-6 xs:py-8 sm:py-10">
-                    <div className="text-gray-500 text-sm xs:text-base sm:text-lg mb-2">No messages yet</div>
+                    <div className="text-gray-500 text-sm xs:text-base sm:text-lg mb-2">
+                      No messages yet
+                    </div>
                     <p className="text-gray-600 text-[10px] xs:text-xs sm:text-sm px-2">
                       Send a message to start the conversation.
-                      <br className="hidden xs:block" />
+                      <br />
                       Open in another device to test real-time chat.
                     </p>
                   </div>
@@ -310,7 +361,9 @@ export default function ChatPage() {
                               {msg.time}
                             </span>
                           </div>
-                          <p className="text-[11px] xs:text-xs sm:text-sm leading-relaxed wrap-break-word">{msg.text}</p>
+                          <p className="text-[11px] xs:text-xs sm:text-sm leading-relaxed wrap-break-word">
+                            {msg.text}
+                          </p>
                         </div>
                       </div>
                     ))}
@@ -319,8 +372,8 @@ export default function ChatPage() {
                 )}
               </div>
 
-              {/* Input de mensagem - Responsivo */}
-              <div className="p-2 xs:p-3 sm:p-4 md:p-6 border-t border-gray-800/50">
+              {/* Input de mensagem */}
+              <div className="p-2 xs:p-3 sm:p-4 md:p-6 border-t border-gray-800/50 flex-shrink-0">
                 <form onSubmit={handleSendMessage} className="flex gap-1 xs:gap-2 sm:gap-3 md:gap-4">
                   <input
                     type="text"
@@ -349,7 +402,7 @@ export default function ChatPage() {
                   </button>
                 </form>
                 
-                {/* Status bar - Responsiva */}
+                {/* Status bar */}
                 <div className="flex flex-wrap items-center justify-between gap-1 xs:gap-2 mt-2 xs:mt-3 text-[9px] xs:text-[10px] sm:text-xs text-gray-500">
                   <div className="flex items-center gap-1 xs:gap-2 sm:gap-3 md:gap-4 flex-wrap">
                     <span className="flex items-center gap-0.5 xs:gap-1">
@@ -361,17 +414,21 @@ export default function ChatPage() {
                     <span className="hidden xs:inline">•</span>
                     <span>{messages.length} msgs</span>
                   </div>
-                  <span className="text-gray-600 text-[9px] xs:text-[10px]">Auto-delete on refresh</span>
+                  <span className="text-gray-600 text-[9px] xs:text-[10px]">
+                    Auto-delete on refresh
+                  </span>
                 </div>
               </div>
             </div>
           </div>
 
-          {/* SIDEBAR - Mostrada apenas em desktop/large tablets */}
+          {/* SIDEBAR - Desktop only */}
           <div className="hidden lg:block lg:col-span-1 space-y-4 sm:space-y-5 md:space-y-6">
             {/* Status card */}
             <div className="glass-card p-3 sm:p-4 md:p-6">
-              <h3 className="font-semibold text-white mb-2 sm:mb-3 md:mb-4 text-sm sm:text-base">Status</h3>
+              <h3 className="font-semibold text-white mb-2 sm:mb-3 md:mb-4 text-sm sm:text-base">
+                Status
+              </h3>
               <div className="space-y-2 sm:space-y-3 md:space-y-4">
                 <div className="flex items-center justify-between">
                   <span className="text-gray-400 text-xs sm:text-sm">Connection</span>
@@ -385,12 +442,27 @@ export default function ChatPage() {
                 
                 <div className="flex items-center justify-between">
                   <span className="text-gray-400 text-xs sm:text-sm">Users Online</span>
-                  <span className="text-emerald-400 text-xs sm:text-sm">{onlineUsers.length}</span>
+                  <span className="text-emerald-400 text-xs sm:text-sm">
+                    {onlineUsers.length}
+                  </span>
                 </div>
                 
                 <div className="flex items-center justify-between">
                   <span className="text-gray-400 text-xs sm:text-sm">Messages</span>
-                  <span className="text-emerald-400 text-xs sm:text-sm">{messages.length}</span>
+                  <span className="text-emerald-400 text-xs sm:text-sm">
+                    {messages.length}
+                  </span>
+                </div>
+                
+                <div className="flex items-center justify-between">
+                  <span className="text-gray-400 text-xs sm:text-sm">Your Role</span>
+                  <span className={`text-xs sm:text-sm ${
+                    user.role === 'admin' ? 'text-purple-400' :
+                    user.role === 'anonymous' ? 'text-gray-400' :
+                    'text-emerald-400'
+                  }`}>
+                    {user.role}
+                  </span>
                 </div>
               </div>
             </div>
@@ -400,9 +472,13 @@ export default function ChatPage() {
               <h3 className="font-semibold text-white mb-2 sm:mb-3 md:mb-4 text-sm sm:text-base">
                 👥 Online ({onlineUsers.length})
               </h3>
-              <div className="space-y-2 sm:space-y-3 max-h-60 overflow-y-auto">
+              <div className="space-y-2 sm:space-y-3 max-h-60 overflow-y-auto touch-auto"
+                   style={{ WebkitOverflowScrolling: 'touch' }}>
                 {onlineUsers.map((username) => (
-                  <div key={username} className="flex items-center gap-2 sm:gap-3 p-2 sm:p-3 hover:bg-gray-800/30 rounded-lg sm:rounded-xl transition-colors">
+                  <div 
+                    key={username} 
+                    className="flex items-center gap-2 sm:gap-3 p-2 sm:p-3 hover:bg-gray-800/30 rounded-lg sm:rounded-xl transition-colors"
+                  >
                     <div className="w-7 h-7 sm:w-8 sm:h-8 md:w-9 md:h-9 lg:w-10 lg:h-10 bg-linear-to-br from-gray-800 to-gray-900 rounded-lg sm:rounded-xl flex items-center justify-center border border-gray-700 shrink-0">
                       <span className="text-gradient font-medium text-xs sm:text-sm">
                         {username.charAt(0)}
@@ -415,7 +491,9 @@ export default function ChatPage() {
                       </p>
                       <div className="flex items-center gap-1 sm:gap-2">
                         <div className="w-1 h-1 bg-emerald-500 rounded-full animate-pulse"></div>
-                        <p className="text-[10px] sm:text-xs text-gray-400">Online</p>
+                        <p className="text-[10px] sm:text-xs text-gray-400">
+                          Online
+                        </p>
                       </div>
                     </div>
                   </div>
@@ -425,7 +503,9 @@ export default function ChatPage() {
 
             {/* Info card */}
             <div className="glass-card p-3 sm:p-4 md:p-6 bg-linear-to-br from-gray-900/50 to-black/50">
-              <h3 className="font-semibold text-white mb-2 sm:mb-3 text-sm sm:text-base">How It Works</h3>
+              <h3 className="font-semibold text-white mb-2 sm:mb-3 text-sm sm:text-base">
+                How It Works
+              </h3>
               <div className="space-y-1.5 sm:space-y-2 text-xs sm:text-sm text-gray-400">
                 <p className="flex items-start gap-1.5">
                   <span className="text-emerald-400 mt-0.5">•</span>
@@ -449,7 +529,7 @@ export default function ChatPage() {
         </div>
       </main>
 
-      {/* Mobile/Tablet bottom bar - Responsiva */}
+      {/* Mobile/Tablet bottom bar */}
       <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-gray-900/95 backdrop-blur-lg border-t border-gray-800 p-2 xs:p-3 z-10">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-1 xs:gap-2">
@@ -459,7 +539,7 @@ export default function ChatPage() {
             </span>
           </div>
           <div className="text-[9px] xs:text-[10px] text-gray-500">
-            Tap to send • Swipe to scroll
+            {user.username}
           </div>
         </div>
       </div>
