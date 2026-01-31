@@ -30,27 +30,60 @@ export default function ChatPage() {
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const previousOnlineUsersRef = useRef<string[]>([]);
-  const hasInitializedRef = useRef(false); // 🔥 NOVO: Previne múltiplas inicializações
+  const hasInitializedRef = useRef(false);
+  const lastMessageIdRef = useRef<number>(0);
+  const pendingMessagesRef = useRef<Message[]>([]);
   const router = useRouter();
 
   // API base URL - FIXO para evitar recriações
   const API_URL = typeof window !== 'undefined' ? window.location.origin : '';
 
-  // 🔥 CORREÇÃO: fetchMessages SEM messages nas dependências
-  const fetchMessages = useCallback(async () => {
+  // 🔥 CORREÇÃO: fetchMessages otimizada - sem flickering
+  const fetchMessages = useCallback(async (force = false) => {
     try {
-      const response = await fetch(`${API_URL}/api/chat`, {
+      const response = await fetch(`${API_URL}/api/chat?t=${Date.now()}`, {
         cache: 'no-store',
         headers: {
-          'Cache-Control': 'no-cache'
+          'Cache-Control': 'no-cache',
+          'Pragma': 'no-cache'
         }
       });
       
       if (response.ok) {
         const data = await response.json();
+        const serverMessages: Message[] = data.messages || [];
         
-        // 🔥 ATUALIZA SEMPRE (sem comparação que causa re-render)
-        setMessages(data.messages || []);
+        // 🔥 LÓGICA MELHORADA: Mescla mensagens do servidor + locais
+        if (serverMessages.length > 0) {
+          const lastServerMsgId = Math.max(...serverMessages.map((m: Message) => m.id));
+          
+          // Se o servidor tem mensagens mais recentes que nossa referência
+          if (force || lastServerMsgId > lastMessageIdRef.current) {
+            // 🔥 Mantém mensagens locais pendentes + mensagens do servidor
+            const allMessages = [...pendingMessagesRef.current];
+            
+            serverMessages.forEach((serverMsg: Message) => {
+              // Adiciona apenas se não existir localmente
+              if (!allMessages.some(m => m.id === serverMsg.id)) {
+                allMessages.push(serverMsg);
+              }
+            });
+            
+            // Ordena por ID (timestamp)
+            allMessages.sort((a, b) => a.id - b.id);
+            
+            // Atualiza última mensagem conhecida
+            lastMessageIdRef.current = Math.max(...allMessages.map(m => m.id));
+            
+            // Remove mensagens pendentes que já foram confirmadas pelo servidor
+            pendingMessagesRef.current = pendingMessagesRef.current.filter(
+              pendingMsg => !serverMessages.some(serverMsg => serverMsg.id === pendingMsg.id)
+            );
+            
+            setMessages(allMessages);
+            lastMessageIdRef.current = lastServerMsgId;
+          }
+        }
         
         // Atualizar usuários online apenas se mudou
         const newOnlineUsers = data.onlineUsers || [];
@@ -67,7 +100,7 @@ export default function ChatPage() {
       console.error('Error fetching messages:', error);
       setIsConnected(false);
     }
-  }, [API_URL]); // 🔥 APENAS API_URL como dependência!
+  }, [API_URL]);
 
   // Adicionar usuário online - APENAS UMA VEZ
   const addOnlineUser = useCallback(async (username: string) => {
@@ -116,9 +149,24 @@ export default function ChatPage() {
     }
   }, [API_URL]);
 
-  // Enviar mensagem
-  const sendMessage = useCallback(async (text: string, username: string) => {
+  // 🔥 CORREÇÃO: Enviar mensagem com otimismo local
+  const sendMessage = useCallback(async (text: string, username: string): Promise<boolean> => {
     try {
+      const messageId = Date.now();
+      const tempMessage: Message = {
+        id: messageId,
+        text,
+        user: username,
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        userId: username
+      };
+      
+      // 🔥 OTIMISMO LOCAL: Adiciona imediatamente à interface
+      setMessages(prev => [...prev, tempMessage]);
+      pendingMessagesRef.current.push(tempMessage);
+      lastMessageIdRef.current = messageId;
+      
+      // 🔥 Envia para o servidor em segundo plano
       const response = await fetch(`${API_URL}/api/chat`, {
         method: 'POST',
         headers: { 
@@ -134,16 +182,31 @@ export default function ChatPage() {
           }
         })
       });
-      return response.ok;
+      
+      if (response.ok) {
+        const data = await response.json();
+        const confirmedMessage = data.message as Message;
+        
+        // 🔥 Atualiza a mensagem local com a versão confirmada do servidor
+        setMessages(prev => 
+          prev.map(msg => 
+            msg.id === messageId ? { ...confirmedMessage, id: messageId } : msg
+          )
+        );
+        
+        // Remove da lista de pendentes
+        pendingMessagesRef.current = pendingMessagesRef.current.filter(m => m.id !== messageId);
+        return true;
+      }
+      return false;
     } catch (error) {
       console.error('Error sending message:', error);
       return false;
     }
   }, [API_URL]);
 
-  // 🔥 CORREÇÃO: useEffect SIMPLIFICADO e sem loop
+  // 🔥 CORREÇÃO: useEffect simplificado e estável
   useEffect(() => {
-    // Evitar múltiplas inicializações
     if (hasInitializedRef.current) return;
     
     const userData = sessionStorage.getItem('user');
@@ -158,23 +221,25 @@ export default function ChatPage() {
     console.log('🔄 Iniciando chat para usuário:', parsedUser.username);
     hasInitializedRef.current = true;
 
-    // 1. Buscar mensagens iniciais
-    fetchMessages();
+    // 1. Buscar mensagens iniciais (FORÇADO)
+    fetchMessages(true);
     
     // 2. Adicionar usuário online (APENAS UMA VEZ)
     if (parsedUser.username && !hasAddedUser) {
-      addOnlineUser(parsedUser.username);
+      setTimeout(() => addOnlineUser(parsedUser.username), 500);
     }
 
-    // 3. Polling para novas mensagens
-    pollIntervalRef.current = setInterval(fetchMessages, 2000);
+    // 3. 🔥 Polling MELHORADO: Apenas verifica por novas mensagens
+    pollIntervalRef.current = setInterval(() => {
+      fetchMessages(false);
+    }, 3000);
 
-    // 4. Verificação de conexão separada
+    // 4. Verificação de conexão
     const connectionCheck = setInterval(() => {
-      fetch(`${API_URL}/api/chat`)
+      fetch(`${API_URL}/api/chat?ping=1`)
         .then(res => setIsConnected(res.ok))
         .catch(() => setIsConnected(false));
-    }, 10000);
+    }, 15000);
 
     return () => {
       console.log('🧹 Limpando recursos do chat');
@@ -186,32 +251,35 @@ export default function ChatPage() {
       
       clearInterval(connectionCheck);
       
-      // Remover usuário online APENAS no unmount
       if (parsedUser.username && hasAddedUser) {
         console.log('🚪 Removendo usuário no cleanup:', parsedUser.username);
         removeOnlineUser(parsedUser.username);
       }
       
       hasInitializedRef.current = false;
+      pendingMessagesRef.current = [];
+      lastMessageIdRef.current = 0;
     };
-  }, [router, API_URL]); // 🔥 DEPENDÊNCIAS MÍNIMAS!
+  }, [router, API_URL]);
 
   // Scroll automático para última mensagem
   const scrollToBottom = useCallback(() => {
     if (messagesEndRef.current) {
-      messagesEndRef.current.scrollIntoView({ 
-        behavior: 'smooth',
-        block: 'end'
-      });
+      setTimeout(() => {
+        messagesEndRef.current?.scrollIntoView({ 
+          behavior: 'smooth',
+          block: 'end'
+        });
+      }, 100);
     }
   }, []);
 
-  // Scroll para última mensagem quando novas mensagens chegam
+  // Scroll quando novas mensagens chegam
   useEffect(() => {
     if (messages.length > 0) {
-      setTimeout(scrollToBottom, 100);
+      scrollToBottom();
     }
-  }, [messages, scrollToBottom]);
+  }, [messages.length, scrollToBottom]);
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -225,14 +293,7 @@ export default function ChatPage() {
     
     const success = await sendMessage(messageText, user.username);
     
-    if (success) {
-      console.log('✅ Mensagem enviada com sucesso');
-      // 🔥 Atualizar mensagens IMEDIATAMENTE após envio
-      setTimeout(() => {
-        fetchMessages();
-        console.log('🔄 Mensagens atualizadas após envio');
-      }, 100);
-    } else {
+    if (!success) {
       console.error('❌ Falha ao enviar mensagem');
       const errorMsg: Message = {
         id: Date.now(),
@@ -242,6 +303,8 @@ export default function ChatPage() {
         userId: 'system'
       };
       setMessages(prev => [...prev, errorMsg]);
+    } else {
+      console.log('✅ Mensagem enviada com sucesso');
     }
     
     setIsSending(false);
@@ -272,7 +335,12 @@ export default function ChatPage() {
         },
         body: JSON.stringify({ action: 'clear_chat' })
       });
-      await fetchMessages();
+      
+      // 🔥 Limpa tudo localmente também
+      setMessages([]);
+      pendingMessagesRef.current = [];
+      lastMessageIdRef.current = 0;
+      
       console.log('✅ Chat limpo com sucesso');
     } catch (error) {
       console.error('Error clearing chat:', error);
@@ -291,13 +359,12 @@ export default function ChatPage() {
         newMessages={messages}
       />
       
-      {/* HEADER - Responsivo para todos dispositivos */}
+      {/* HEADER */}
       <header className="glass-card mx-1 xs:mx-2 sm:mx-3 md:mx-4 mt-1 xs:mt-2 sm:mt-3 md:mt-4 mb-2 xs:mb-3 sm:mb-4 md:mb-6">
         <div className="max-w-7xl mx-auto px-2 xs:px-3 sm:px-4 md:px-6 py-2 xs:py-3 sm:py-4">
           <div className="flex flex-col xs:flex-row items-start xs:items-center justify-between gap-2 xs:gap-3">
             <div className="flex items-center gap-2 xs:gap-3 w-full xs:w-auto">
-              {/* Logo */}
-              <div className="w-7 h-7 xs:w-8 xs:h-8 sm:w-9 sm:h-9 md:w-10 md:h-10 bg-linear-to-br from-gray-900 to-black rounded-lg xs:rounded-xl flex items-center justify-center border border-gray-800 flex-shrink-0">
+              <div className="w-7 h-7 xs:w-8 xs:h-8 sm:w-9 sm:h-9 md:w-10 md:h-10 bg-linear-to-br from-gray-900 to-black rounded-lg xs:rounded-xl flex items-center justify-center border border-gray-800 shrink-0">
                 <span className="text-gradient font-bold text-xs xs:text-sm sm:text-base md:text-lg">01</span>
               </div>
               
@@ -315,7 +382,6 @@ export default function ChatPage() {
             </div>
             
             <div className="flex items-center justify-between xs:justify-end gap-2 w-full xs:w-auto mt-1 xs:mt-0">
-              {/* Online users badge */}
               <div className="flex items-center gap-1 xs:gap-2 px-2 xs:px-3 py-1 bg-gray-900/50 rounded-full border border-gray-800">
                 <div className="w-1.5 h-1.5 xs:w-2 xs:h-2 bg-emerald-500 rounded-full animate-pulse"></div>
                 <span className="text-[10px] xs:text-xs text-gray-400 whitespace-nowrap">
@@ -323,7 +389,6 @@ export default function ChatPage() {
                 </span>
               </div>
               
-              {/* Botões */}
               <div className="flex items-center gap-1 xs:gap-2">
                 <button
                   onClick={handleClearChat}
@@ -349,10 +414,8 @@ export default function ChatPage() {
 
       <main className="max-w-7xl mx-auto px-1 xs:px-2 sm:px-3 md:px-4 pb-4 sm:pb-6 md:pb-8">
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-3 xs:gap-4 sm:gap-5 md:gap-6">
-          {/* CHAT PRINCIPAL */}
           <div className="lg:col-span-3">
             <div className="glass-card h-[calc(100dvh-140px)] xs:h-[calc(100dvh-150px)] sm:h-[calc(100dvh-160px)] md:h-[calc(100dvh-180px)] flex flex-col overflow-hidden">
-              {/* Área de mensagens - SCROLL FIXADO */}
               <div 
                 ref={messagesContainerRef}
                 className="flex-1 overflow-y-auto p-2 xs:p-3 sm:p-4 md:p-6 touch-scroll no-scrollbar"
@@ -372,7 +435,7 @@ export default function ChatPage() {
                   <div className="space-y-2 xs:space-y-3 sm:space-y-4">
                     {messages.map((msg) => (
                       <div
-                        key={msg.id}
+                        key={`msg-${msg.id}-${msg.time}`}
                         className={`flex ${msg.userId === user.username ? 'justify-end' : 'justify-start'} fade-in`}
                       >
                         <div className={`max-w-[90%] xs:max-w-[85%] sm:max-w-[80%] rounded-xl xs:rounded-2xl px-2 xs:px-3 sm:px-4 py-1.5 xs:py-2 sm:py-3 ${
@@ -413,8 +476,7 @@ export default function ChatPage() {
                 )}
               </div>
 
-              {/* Input de mensagem */}
-              <div className="p-2 xs:p-3 sm:p-4 md:p-6 border-t border-gray-800/50 flex-shrink-0">
+              <div className="p-2 xs:p-3 sm:p-4 md:p-6 border-t border-gray-800/50 shrink-0">
                 <form onSubmit={handleSendMessage} className="flex gap-1 xs:gap-2 sm:gap-3 md:gap-4">
                   <input
                     type="text"
@@ -433,7 +495,7 @@ export default function ChatPage() {
                   <button
                     type="submit"
                     disabled={!input.trim() || isSending}
-                    className="cypher-btn-primary px-3 xs:px-4 sm:px-5 md:px-6 text-[11px] xs:text-xs sm:text-sm md:text-base whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed min-w-[60px] xs:min-w-[70px] sm:min-w-[80px]"
+                    className="cypher-btn-primary px-3 xs:px-4 sm:px-5 md:px-6 text-[11px] xs:text-xs sm:text-sm md:text-base whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed min-w-15 xs:min-w-[70px] sm:min-w-20"
                   >
                     {isSending ? (
                       <span className="flex items-center justify-center gap-1 xs:gap-2">
@@ -449,7 +511,6 @@ export default function ChatPage() {
                   </button>
                 </form>
                 
-                {/* Status bar */}
                 <div className="flex flex-wrap items-center justify-between gap-1 xs:gap-2 mt-2 xs:mt-3 text-[9px] xs:text-[10px] sm:text-xs text-gray-500">
                   <div className="flex items-center gap-1 xs:gap-2 sm:gap-3 md:gap-4 flex-wrap">
                     <span className="flex items-center gap-0.5 xs:gap-1">
@@ -457,7 +518,7 @@ export default function ChatPage() {
                       {isConnected ? 'Connected' : 'Offline'}
                     </span>
                     <span className="hidden xs:inline">•</span>
-                    <span>Updates every 2s</span>
+                    <span>Updates every 3s</span>
                     <span className="hidden xs:inline">•</span>
                     <span>{messages.length} msgs</span>
                   </div>
@@ -469,9 +530,8 @@ export default function ChatPage() {
             </div>
           </div>
 
-          {/* SIDEBAR - Desktop only */}
+          {/* SIDEBAR */}
           <div className="hidden lg:block lg:col-span-1 space-y-4 sm:space-y-5 md:space-y-6">
-            {/* Status card */}
             <div className="glass-card p-3 sm:p-4 md:p-6">
               <h3 className="font-semibold text-white mb-2 sm:mb-3 md:mb-4 text-sm sm:text-base">
                 Status
@@ -514,7 +574,6 @@ export default function ChatPage() {
               </div>
             </div>
 
-            {/* Online Users card */}
             <div className="glass-card p-3 sm:p-4 md:p-6">
               <h3 className="font-semibold text-white mb-2 sm:mb-3 md:mb-4 text-sm sm:text-base">
                 👥 Online ({onlineUsers.length})
@@ -547,7 +606,6 @@ export default function ChatPage() {
               </div>
             </div>
 
-            {/* Info card */}
             <div className="glass-card p-3 sm:p-4 md:p-6 bg-linear-to-br from-gray-900/50 to-black/50">
               <h3 className="font-semibold text-white mb-2 sm:mb-3 text-sm sm:text-base">
                 How It Works
@@ -575,7 +633,6 @@ export default function ChatPage() {
         </div>
       </main>
 
-      {/* Mobile/Tablet bottom bar */}
       <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-gray-900/95 backdrop-blur-lg border-t border-gray-800 p-2 xs:p-3 z-10">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-1 xs:gap-2">
@@ -593,7 +650,6 @@ export default function ChatPage() {
         </div>
       </div>
 
-      {/* Touch-friendly padding for mobile bottom bar */}
       <div className="lg:hidden h-14 xs:h-16"></div>
     </div>
   );
