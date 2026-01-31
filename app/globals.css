@@ -1,26 +1,117 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #050505;
+  --foreground: #f0f0f0;
+  --primary: #10b981;
+  --accent: #8b5cf6;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-primary: var(--primary);
+  --color-accent: var(--accent);
+  --font-sans: ui-sans-serif, system-ui, sans-serif, "Inter", -apple-system, BlinkMacSystemFont;
+  --radius-lg: 1rem;
+  --radius-md: 0.75rem;
+  --radius-sm: 0.5rem;
+  --animate-fade-in: fadeIn 0.3s ease-out;
+  --animate-slide-up: slideUp 0.3s ease-out;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+@layer base {
+  body {
+    background: var(--background);
+    color: var(--foreground);
+    overflow-x: hidden;
+  }
+
+  ::selection {
+    background: rgba(139, 92, 246, 0.3);
+  }
+  
+  /* Scrollbar elegante */
+  ::-webkit-scrollbar {
+    width: 8px;
+  }
+  
+  ::-webkit-scrollbar-track {
+    background: rgba(30, 30, 30, 0.3);
+    border-radius: 4px;
+  }
+  
+  ::-webkit-scrollbar-thumb {
+    background: rgba(100, 100, 100, 0.5);
+    border-radius: 4px;
+  }
+  
+  ::-webkit-scrollbar-thumb:hover {
+    background: rgba(139, 92, 246, 0.5);
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+@layer components {
+  .glass-card {
+    @apply bg-gray-900/40 backdrop-blur-lg border border-gray-800 rounded-2xl;
+  }
+  
+  .cypher-btn {
+    @apply bg-linear-to-r from-gray-800 to-gray-900 hover:from-gray-700 hover:to-gray-800 text-gray-200 font-medium px-5 py-3 rounded-xl border border-gray-700 hover:border-gray-600 transition-all duration-300 hover:scale-[1.02] active:scale-[0.98];
+  }
+  
+  .cypher-btn-primary {
+    @apply bg-linear-to-r from-emerald-800 to-emerald-900 hover:from-emerald-700 hover:to-emerald-800 text-white font-medium px-5 py-3 rounded-xl border border-emerald-700 hover:border-emerald-600 transition-all duration-300 hover:scale-[1.02] active:scale-[0.98];
+  }
+  
+  .cypher-input {
+    @apply bg-gray-900/50 border border-gray-700 rounded-xl px-4 py-3 text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500/50 transition-all duration-300;
+  }
+  
+  .message-bubble {
+    @apply rounded-2xl px-4 py-3 max-w-[80%];
+  }
+  
+  .binary-text {
+    font-family: 'Courier New', monospace;
+    color: rgba(16, 185, 129, 0.1);
+  }
+}
+
+@layer utilities {
+  .text-gradient {
+    @apply bg-linear-to-r from-emerald-400 to-purple-400 bg-clip-text text-transparent;
+  }
+  
+  .glow {
+    box-shadow: 0 0 20px rgba(16, 185, 129, 0.1);
+  }
+  
+  .glow-purple {
+    box-shadow: 0 0 20px rgba(139, 92, 246, 0.1);
+  }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideUp {
+  from { 
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to { 
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.fade-in {
+  animation: fadeIn 0.3s ease-out;
+}
+
+.slide-up {
+  animation: slideUp 0.3s ease-out;
 }
