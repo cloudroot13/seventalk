@@ -27,6 +27,7 @@ export default function ChatPage() {
   const [isSending, setIsSending] = useState(false);
   const [hasAddedUser, setHasAddedUser] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const previousOnlineUsersRef = useRef<string[]>([]);
   const router = useRouter();
@@ -67,7 +68,7 @@ export default function ChatPage() {
       console.error('Error fetching messages:', error);
       setIsConnected(false);
     }
-  }, [API_URL, messages]); // Adicionado messages como dependência
+  }, [API_URL, messages]);
 
   // Adicionar usuário online - APENAS UMA VEZ
   const addOnlineUser = useCallback(async (username: string) => {
@@ -175,17 +176,42 @@ export default function ChatPage() {
     };
   }, [router, fetchMessages, addOnlineUser, removeOnlineUser, hasAddedUser]);
 
-  // Scroll para última mensagem
+  // Scroll automático para última mensagem
+  const scrollToBottom = useCallback(() => {
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ 
+        behavior: 'smooth',
+        block: 'end'
+      });
+    }
+  }, []);
+
+  // Scroll para última mensagem quando novas mensagens chegam
   useEffect(() => {
     if (messages.length > 0) {
-      setTimeout(() => {
-        messagesEndRef.current?.scrollIntoView({ 
-          behavior: 'smooth',
-          block: 'end'
-        });
-      }, 100);
+      setTimeout(scrollToBottom, 100);
     }
-  }, [messages]);
+  }, [messages, scrollToBottom]);
+
+  // Função para detectar se o usuário está perto do final
+  const isNearBottom = () => {
+    if (!messagesContainerRef.current) return true;
+    
+    const container = messagesContainerRef.current;
+    const scrollTop = container.scrollTop;
+    const scrollHeight = container.scrollHeight;
+    const clientHeight = container.clientHeight;
+    
+    // Se estiver a 100px do final, considera "perto do final"
+    return scrollHeight - scrollTop - clientHeight < 100;
+  };
+
+  // Auto-scroll apenas se o usuário já estava perto do final
+  useEffect(() => {
+    if (messages.length > 0 && isNearBottom()) {
+      scrollToBottom();
+    }
+  }, [messages, scrollToBottom]);
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -225,6 +251,10 @@ export default function ChatPage() {
   };
 
   const handleClearChat = async () => {
+    if (!window.confirm('Clear all messages? This action cannot be undone.')) {
+      return;
+    }
+    
     try {
       await fetch(`${API_URL}/api/chat`, {
         method: 'POST',
@@ -312,10 +342,12 @@ export default function ChatPage() {
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-3 xs:gap-4 sm:gap-5 md:gap-6">
           {/* CHAT PRINCIPAL */}
           <div className="lg:col-span-3">
-            <div className="glass-card h-[calc(100vh-140px)] xs:h-[calc(100vh-150px)] sm:h-[calc(100vh-160px)] md:h-[calc(100vh-180px)] flex flex-col overflow-hidden">
-              {/* Área de mensagens - FIXADO O SCROLL */}
-              <div className="flex-1 overflow-y-auto p-2 xs:p-3 sm:p-4 md:p-6 touch-auto" 
-                   style={{ WebkitOverflowScrolling: 'touch' }}>
+            <div className="glass-card h-[calc(100dvh-140px)] xs:h-[calc(100dvh-150px)] sm:h-[calc(100dvh-160px)] md:h-[calc(100dvh-180px)] flex flex-col overflow-hidden">
+              {/* Área de mensagens - SCROLL FIXADO */}
+              <div 
+                ref={messagesContainerRef}
+                className="flex-1 overflow-y-auto p-2 xs:p-3 sm:p-4 md:p-6 touch-scroll no-scrollbar"
+              >
                 {messages.length === 0 ? (
                   <div className="text-center py-6 xs:py-8 sm:py-10">
                     <div className="text-gray-500 text-sm xs:text-base sm:text-lg mb-2">
@@ -382,6 +414,12 @@ export default function ChatPage() {
                     placeholder={`Message as ${user.username}...`}
                     className="cypher-input flex-1 text-[11px] xs:text-xs sm:text-sm md:text-base placeholder:text-[10px] xs:placeholder:text-xs"
                     disabled={isSending}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        handleSendMessage(e);
+                      }
+                    }}
                   />
                   <button
                     type="submit"
@@ -415,7 +453,7 @@ export default function ChatPage() {
                     <span>{messages.length} msgs</span>
                   </div>
                   <span className="text-gray-600 text-[9px] xs:text-[10px]">
-                    Auto-delete on refresh
+                    Press Enter to send
                   </span>
                 </div>
               </div>
@@ -472,8 +510,7 @@ export default function ChatPage() {
               <h3 className="font-semibold text-white mb-2 sm:mb-3 md:mb-4 text-sm sm:text-base">
                 👥 Online ({onlineUsers.length})
               </h3>
-              <div className="space-y-2 sm:space-y-3 max-h-60 overflow-y-auto touch-auto"
-                   style={{ WebkitOverflowScrolling: 'touch' }}>
+              <div className="space-y-2 sm:space-y-3 max-h-60 overflow-y-auto touch-scroll no-scrollbar">
                 {onlineUsers.map((username) => (
                   <div 
                     key={username} 
@@ -534,18 +571,21 @@ export default function ChatPage() {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-1 xs:gap-2">
             <div className={`w-1.5 h-1.5 rounded-full ${isConnected ? 'bg-emerald-500 animate-pulse' : 'bg-red-500'}`}></div>
-            <span className="text-[10px] xs:text-xs text-gray-400">
-              {onlineUsers.length} online • {messages.length} msgs
+            <span className="text-[10px] xs:text-xs text-gray-400 whitespace-nowrap">
+              {onlineUsers.length} online
             </span>
           </div>
-          <div className="text-[9px] xs:text-[10px] text-gray-500">
+          <div className="text-[10px] xs:text-xs text-gray-500 whitespace-nowrap">
             {user.username}
+          </div>
+          <div className="text-[9px] xs:text-[10px] text-gray-600">
+            Tap to send
           </div>
         </div>
       </div>
 
       {/* Touch-friendly padding for mobile bottom bar */}
-      <div className="lg:hidden h-12 xs:h-14"></div>
+      <div className="lg:hidden h-14 xs:h-16"></div>
     </div>
   );
 }
