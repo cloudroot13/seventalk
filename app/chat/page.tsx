@@ -3,9 +3,9 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import BinaryBackground from '@/src/components/BinaryBackground';
-import ChatNotifications from '../../src/components/ChatNotifications';
-import UserActivityTracker from '../../src/components/UserActivityTracker';
-import { useMobileZoomFix } from '@/src/hooks/useMobileZoomFix'; // 🆕
+import ChatNotifications from '@/src/components/ChatNotifications';
+import UserActivityTracker from '@/src/components/UserActivityTracker';
+import { useMobileZoomFix } from '@/src/hooks/useMobileZoomFix';
 
 interface User {
   username: string;
