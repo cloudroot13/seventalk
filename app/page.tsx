@@ -6,9 +6,9 @@ import BinaryBackground from '@/src/components/BinaryBackground';
 
 const ALLOWED_USERS = [
   { username: "pazzyne", password: "1Li3ycKlfu", role: "user" },
-  { username: "flux", password: "TwxGOr:064", role: "user" },
+  { username: "flux", password: "W6Ps3kNfrK", role: "user" },
   { username: "cloud", password: "opwh7js8f2", role: "admin" },
-  { username: "Anonymous", password: "opwh7js8f2", role: "anonymous" }
+  { username: "Anonymous", password: "oaJ78d3Sjfg", role: "anonymous" }
 ];
 
 export default function LoginPage() {
