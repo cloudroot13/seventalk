@@ -135,23 +135,6 @@ export default function LoginPage() {
             </div>
           </div>
 
-          <div className="flex gap-3">
-            <button
-              type="button"
-              onClick={handleClearForm}
-              className="cypher-btn-secondary flex-1 py-3 text-sm"
-            >
-              Clear
-            </button>
-            <button
-              type="button"
-              onClick={handleDemoFill}
-              className="cypher-btn-secondary flex-1 py-3 text-sm"
-            >
-              Fill Demo
-            </button>
-          </div>
-
           {error && (
             <div className={`bg-${error.includes('Demo') ? 'blue' : 'red'}-900/20 border border-${error.includes('Demo') ? 'blue' : 'red'}-800/50 rounded-xl p-4 fade-in`}>
               <div className="flex items-center gap-2">

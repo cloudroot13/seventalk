@@ -4,14 +4,6 @@ import { useEffect, useRef } from 'react';
 
 export default function BinaryBackground() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const maskImageRef = useRef<HTMLImageElement | null>(null);
-
-  // Pré-carregar a imagem da máscara Anonymous
-  useEffect(() => {
-    maskImageRef.current = new Image();
-    // Usando um SVG da máscara Anonymous (transparente)
-    maskImageRef.current.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 200'%3E%3Cpath fill='%2300ffff' d='M100,20c44.2,0,80,35.8,80,80s-35.8,80-80,80S20,144.2,20,100S55.8,20,100,20 M100,10C55.4,10,20,45.4,20,90 s35.4,80,80,80s80-35.4,80-80S144.6,10,100,10L100,10z'/%3E%3Cpath fill='%2300ffff' d='M70,60c0-5.5,4.5-10,10-10h40c5.5,0,10,4.5,10,10v30c0,5.5-4.5,10-10,10H80c-5.5,0-10-4.5-10-10V60z'/%3E%3Cpath fill='%2300ffff' d='M140,85c0-5.5,4.5-10,10-10h10c5.5,0,10,4.5,10,10s-4.5,10-10,10h-10C144.5,95,140,90.5,140,85z'/%3E%3Cpath fill='%2300ffff' d='M40,85c0-5.5,4.5-10,10-10h10c5.5,0,10,4.5,10,10s-4.5,10-10,10H50C44.5,95,40,90.5,40,85z'/%3E%3C/svg%3E";
-  }, []);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -21,9 +13,8 @@ export default function BinaryBackground() {
     if (!ctx) return;
 
     const binaryChars = "01";
-    const fontSize = 22; // Aumentado de 18 para 22
+    const fontSize = 24; // Aumentado para maior visibilidade
     let animationId: number;
-    let maskOpacity = 0.03; // Opacidade da máscara Anonymous
 
     const init = () => {
       canvas.width = window.innerWidth;
@@ -33,23 +24,25 @@ export default function BinaryBackground() {
       const drops: number[] = Array(columns).fill(0).map(() => Math.random() * -canvas.height);
       
       const draw = () => {
-        // Fundo escuro para contraste
-        ctx.fillStyle = 'rgba(3, 3, 10, 0.7)'; // Mais escuro para binários aparecerem mais
+        // Fundo bem escuro para contraste máximo
+        ctx.fillStyle = 'rgba(2, 2, 8, 0.85)';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
         
-        // Desenhar máscara Anonymous (muito sutil)
-        if (maskImageRef.current?.complete) {
-          const maskSize = Math.min(canvas.width, canvas.height) * 0.6;
-          const maskX = (canvas.width - maskSize) / 2;
-          const maskY = (canvas.height - maskSize) / 2;
-          
-          ctx.globalAlpha = maskOpacity;
-          ctx.drawImage(maskImageRef.current, maskX, maskY, maskSize, maskSize);
-          ctx.globalAlpha = 1;
-        }
+        // Desenhar SÍMBOLO $ GRANDE no centro (verde forte)
+        const dollarSize = Math.min(canvas.width, canvas.height) * 0.8; // 80% da tela
+        const dollarX = (canvas.width - dollarSize) / 2;
+        const dollarY = (canvas.height - dollarSize) / 2;
         
-        // Binários PRINCIPAIS (mais fortes)
-        ctx.fillStyle = 'rgba(0, 255, 255, 0.15)'; // Ciano mais forte
+        ctx.globalAlpha = 0.07; // Muito sutil mas visível
+        ctx.fillStyle = '#00ff00'; // Verde forte
+        ctx.font = `bold ${dollarSize * 0.8}px 'Courier New', monospace`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('$', canvas.width / 2, canvas.height / 2);
+        ctx.globalAlpha = 1;
+        
+        // BINÁRIOS PRINCIPAIS - MUITO FORTES
+        ctx.fillStyle = 'rgba(0, 255, 0, 0.25)'; // Verde forte e visível
         ctx.font = `bold ${fontSize}px 'Courier New', monospace`;
         ctx.textAlign = 'center';
         
@@ -58,52 +51,77 @@ export default function BinaryBackground() {
           const x = i * fontSize + fontSize / 2;
           const y = drops[i];
           
-          // Efeito de brilho para alguns caracteres
-          if (Math.random() > 0.7) {
-            ctx.fillStyle = 'rgba(255, 255, 255, 0.25)'; // Branco brilhante
+          // Efeito de brilho alternado (50% dos caracteres mais brilhantes)
+          if (Math.random() > 0.5) {
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.4)'; // Branco muito brilhante
             ctx.fillText(char, x, y);
-            ctx.fillStyle = 'rgba(0, 255, 255, 0.15)'; // Volta ao ciano
+            ctx.fillStyle = 'rgba(0, 255, 0, 0.25)'; // Volta ao verde
           } else {
             ctx.fillText(char, x, y);
           }
           
-          if (y > canvas.height && Math.random() > 0.95) {
+          if (y > canvas.height && Math.random() > 0.97) {
             drops[i] = 0;
           }
-          drops[i] += fontSize * 0.9; // Aumentada velocidade
+          drops[i] += fontSize * 0.95; // Velocidade alta
         }
         
-        // Binários SECUNDÁRIOS (ainda mais fortes, em camadas)
-        ctx.fillStyle = 'rgba(16, 185, 129, 0.12)'; // Verde esmeralda
-        ctx.font = `bold ${fontSize * 0.8}px 'Courier New', monospace`;
+        // BINÁRIOS SECUNDÁRIOS (mais rápidos, mais brilhantes)
+        ctx.fillStyle = 'rgba(0, 255, 100, 0.2)'; // Verde limão
+        ctx.font = `bold ${fontSize * 0.9}px 'Courier New', monospace`;
         
-        const secondaryColumns = Math.floor(canvas.width / (fontSize * 0.8));
-        const secondaryOffset = canvas.height * 0.3;
+        const secondaryColumns = Math.floor(canvas.width / (fontSize * 0.9));
+        const secondaryOffset = canvas.height * 0.4;
         
         for (let i = 0; i < secondaryColumns; i++) {
           const char = binaryChars[Math.floor(Math.random() * binaryChars.length)];
-          const x = i * (fontSize * 0.8) + (fontSize * 0.8) / 2;
+          const x = i * (fontSize * 0.9) + (fontSize * 0.9) / 2;
           const y = (drops[i % drops.length] + secondaryOffset) % canvas.height;
+          
+          // 30% chance de binário super brilhante
+          if (Math.random() > 0.7) {
+            ctx.save();
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+            ctx.fillText(char, x, y);
+            ctx.restore();
+          } else {
+            ctx.fillText(char, x, y);
+          }
+        }
+        
+        // BINÁRIOS TERCIÁRIOS (pequenos e rápidos)
+        ctx.fillStyle = 'rgba(100, 255, 100, 0.15)';
+        ctx.font = `bold ${fontSize * 0.7}px 'Courier New', monospace`;
+        
+        const tertiaryColumns = Math.floor(canvas.width / (fontSize * 0.7));
+        
+        for (let i = 0; i < tertiaryColumns; i++) {
+          const char = binaryChars[Math.floor(Math.random() * binaryChars.length)];
+          const x = i * (fontSize * 0.7) + (fontSize * 0.7) / 2;
+          const y = (drops[(i * 3) % drops.length] * 1.3) % canvas.height;
           
           ctx.fillText(char, x, y);
         }
         
-        // Efeito de scanner (linha que varre a tela)
-        const scannerY = (Date.now() / 20) % canvas.height;
-        ctx.strokeStyle = 'rgba(0, 255, 255, 0.1)';
-        ctx.lineWidth = 2;
+        // EFEITO SCANNER (linha verde que varre)
+        const scannerY = (Date.now() / 15) % canvas.height;
+        
+        // Gradiente do scanner
+        const scannerGradient = ctx.createLinearGradient(0, scannerY - 15, 0, scannerY + 15);
+        scannerGradient.addColorStop(0, 'rgba(0, 255, 0, 0)');
+        scannerGradient.addColorStop(0.5, 'rgba(0, 255, 0, 0.15)');
+        scannerGradient.addColorStop(1, 'rgba(0, 255, 0, 0)');
+        
+        ctx.fillStyle = scannerGradient;
+        ctx.fillRect(0, scannerY - 15, canvas.width, 30);
+        
+        // Linha central do scanner
+        ctx.strokeStyle = 'rgba(0, 255, 0, 0.3)';
+        ctx.lineWidth = 1;
         ctx.beginPath();
         ctx.moveTo(0, scannerY);
         ctx.lineTo(canvas.width, scannerY);
         ctx.stroke();
-        
-        // Gradiente no scanner
-        const scannerGradient = ctx.createLinearGradient(0, scannerY - 10, 0, scannerY + 10);
-        scannerGradient.addColorStop(0, 'rgba(0, 255, 255, 0)');
-        scannerGradient.addColorStop(0.5, 'rgba(0, 255, 255, 0.1)');
-        scannerGradient.addColorStop(1, 'rgba(0, 255, 255, 0)');
-        ctx.fillStyle = scannerGradient;
-        ctx.fillRect(0, scannerY - 10, canvas.width, 20);
         
         animationId = requestAnimationFrame(draw);
       };
@@ -128,20 +146,20 @@ export default function BinaryBackground() {
         aria-hidden="true"
       />
       
-      {/* Overlay de gradiente para profundidade */}
-      <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(ellipse_at_center,rgba(5,5,15,0.3)_0%,rgba(0,0,0,0.8)_70%)]"></div>
+      {/* Overlay de gradiente verde escuro */}
+      <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(ellipse_at_center,rgba(0,20,0,0.4)_0%,rgba(0,0,0,0.9)_80%)]"></div>
       
-      {/* Efeito de partículas binárias (CSS adicional) */}
+      {/* Partículas binárias extras (CSS) */}
       <div className="absolute top-0 left-0 w-full h-full">
-        {Array.from({ length: 30 }).map((_, i) => (
+        {Array.from({ length: 50 }).map((_, i) => (
           <div
             key={i}
-            className="absolute text-[10px] text-cyan-500/20 font-mono animate-float"
+            className="absolute text-xs text-green-500/30 font-mono font-bold animate-float-fast"
             style={{
               left: `${Math.random() * 100}%`,
               top: `${Math.random() * 100}%`,
-              animationDelay: `${i * 0.5}s`,
-              animationDuration: `${15 + Math.random() * 10}s`
+              animationDelay: `${i * 0.2}s`,
+              animationDuration: `${8 + Math.random() * 5}s`
             }}
           >
             {Math.random() > 0.5 ? '1' : '0'}
@@ -149,10 +167,9 @@ export default function BinaryBackground() {
         ))}
       </div>
       
-      {/* Efeito de glitch muito sutil */}
-      <div className="absolute top-0 left-0 w-full h-full opacity-5">
-        <div className="absolute top-0 left-0 w-full h-1 bg-cyan-500 animate-pulse"></div>
-        <div className="absolute bottom-0 left-0 w-full h-1 bg-cyan-500 animate-pulse"></div>
+      {/* Efeito de brilho pulsante no símbolo $ */}
+      <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2">
+        <div className="text-green-500/5 text-[40vw] font-bold font-mono animate-pulse-slow">$</div>
       </div>
     </div>
   );
