@@ -16,8 +16,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [showPasswords, setShowPasswords] = useState(false);
-  const [selectedUser, setSelectedUser] = useState<string | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
@@ -26,17 +25,6 @@ export default function LoginPage() {
       router.push('/chat');
     }
   }, [router]);
-
-  useEffect(() => {
-    if (selectedUser) {
-      const user = ALLOWED_USERS.find(u => u.username === selectedUser);
-      if (user) {
-        setUsername(user.username);
-        setPassword(user.password);
-        setError('');
-      }
-    }
-  }, [selectedUser]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -67,17 +55,18 @@ export default function LoginPage() {
     }
   };
 
-  const handleQuickSelect = (user: typeof ALLOWED_USERS[0]) => {
-    setSelectedUser(user.username);
-    setUsername(user.username);
-    setPassword(user.password);
+  const handleClearForm = () => {
+    setUsername('');
+    setPassword('');
     setError('');
   };
 
-  const copyPassword = (password: string) => {
-    navigator.clipboard.writeText(password);
-    setError('Password copied to clipboard!');
-    setTimeout(() => setError(''), 2000);
+  const handleDemoFill = () => {
+    // Apenas preenche com dados de demonstração, mas NÃO faz login automático
+    const demoUser = ALLOWED_USERS[0]; // pazzyne
+    setUsername(demoUser.username);
+    setPassword(demoUser.password);
+    setError('Demo credentials filled. Click "Access Secure Chat" to login.');
   };
 
   return (
@@ -92,47 +81,32 @@ export default function LoginPage() {
             <span className="text-2xl md:text-3xl text-gradient font-bold">01</span>
           </div>
           <h1 className="text-2xl md:text-3xl font-bold text-white mb-3">Cypher Chat</h1>
-          <p className="text-gray-400 text-sm md:text-base">End-to-end encrypted messaging</p>
+          <p className="text-gray-400 text-sm md:text-base">Restricted Access • Authorized Users Only</p>
           <div className="inline-flex items-center gap-2 mt-4 px-3 py-1 bg-gray-900/50 rounded-full border border-gray-800">
             <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></div>
-            <span className="text-xs text-gray-400">Messages auto-delete on exit</span>
-          </div>
-        </div>
-
-        <div className="mb-6">
-          <h3 className="text-sm font-medium text-gray-300 mb-3">Quick Login:</h3>
-          <div className="grid grid-cols-2 gap-2">
-            {ALLOWED_USERS.map((user) => (
-              <button
-                key={user.username}
-                type="button"
-                onClick={() => handleQuickSelect(user)}
-                className={`cypher-btn-secondary text-xs py-2 ${selectedUser === user.username ? 'bg-gray-800' : ''}`}
-              >
-                {user.username}
-                {user.role === 'admin' && ' 👑'}
-                {user.role === 'anonymous' && ' 👤'}
-              </button>
-            ))}
+            <span className="text-xs text-gray-400">Secure authentication required</span>
           </div>
         </div>
 
         <form onSubmit={handleLogin} className="space-y-6">
-          <div className="space-y-4">
+          <div className="space-y-5">
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
-                Username
-              </label>
+              <div className="flex justify-between items-center mb-2">
+                <label className="block text-sm font-medium text-gray-300">
+                  Username
+                </label>
+                <span className="text-xs text-gray-500">
+                  {ALLOWED_USERS.length} authorized users
+                </span>
+              </div>
               <input
                 type="text"
                 value={username}
-                onChange={(e) => {
-                  setUsername(e.target.value);
-                  setSelectedUser(null);
-                }}
+                onChange={(e) => setUsername(e.target.value)}
                 className="cypher-input w-full no-zoom"
-                placeholder="Enter username"
+                placeholder="Enter your username"
                 required
+                autoComplete="username"
               />
             </div>
 
@@ -143,117 +117,111 @@ export default function LoginPage() {
                 </label>
                 <button
                   type="button"
-                  onClick={() => setShowPasswords(!showPasswords)}
-                  className="text-xs text-gray-400 hover:text-gray-300"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="text-xs text-gray-400 hover:text-gray-300 transition-colors"
                 >
-                  {showPasswords ? 'Hide' : 'Show'} Passwords
+                  {showPassword ? 'Hide' : 'Show'}
                 </button>
               </div>
               <input
-                type={showPasswords ? "text" : "password"}
+                type={showPassword ? "text" : "password"}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 className="cypher-input w-full no-zoom"
-                placeholder="Enter password"
+                placeholder="Enter your password"
                 required
+                autoComplete="current-password"
               />
             </div>
           </div>
 
-          {showPasswords && (
-            <div className="bg-gray-900/30 border border-gray-800/50 rounded-xl p-4">
-              <h4 className="text-sm font-medium text-gray-300 mb-2">Available Passwords:</h4>
-              <div className="space-y-2">
-                {ALLOWED_USERS.map((user) => (
-                  <div key={user.username} className="flex items-center justify-between">
-                    <span className="text-xs text-gray-400">{user.username}:</span>
-                    <div className="flex items-center gap-2">
-                      <code className="text-xs bg-gray-800 px-2 py-1 rounded">
-                        {user.password}
-                      </code>
-                      <button
-                        type="button"
-                        onClick={() => copyPassword(user.password)}
-                        className="text-xs text-blue-400 hover:text-blue-300"
-                      >
-                        Copy
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
+          <div className="flex gap-3">
+            <button
+              type="button"
+              onClick={handleClearForm}
+              className="cypher-btn-secondary flex-1 py-3 text-sm"
+            >
+              Clear
+            </button>
+            <button
+              type="button"
+              onClick={handleDemoFill}
+              className="cypher-btn-secondary flex-1 py-3 text-sm"
+            >
+              Fill Demo
+            </button>
+          </div>
 
           {error && (
-            <div className={`bg-${error.includes('copied') ? 'blue' : 'red'}-900/20 border border-${error.includes('copied') ? 'blue' : 'red'}-800/50 rounded-xl p-4 fade-in`}>
+            <div className={`bg-${error.includes('Demo') ? 'blue' : 'red'}-900/20 border border-${error.includes('Demo') ? 'blue' : 'red'}-800/50 rounded-xl p-4 fade-in`}>
               <div className="flex items-center gap-2">
-                <span className={error.includes('copied') ? "text-blue-400" : "text-red-400"}>
-                  {error.includes('copied') ? "✓" : "⚠"}
+                <span className={error.includes('Demo') ? "text-blue-400" : "text-red-400"}>
+                  {error.includes('Demo') ? "ℹ️" : "⚠️"}
                 </span>
-                <p className={error.includes('copied') ? "text-blue-300 text-sm" : "text-red-300 text-sm"}>
+                <p className={error.includes('Demo') ? "text-blue-300 text-sm" : "text-red-300 text-sm"}>
                   {error}
                 </p>
               </div>
             </div>
           )}
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="cypher-btn-primary w-full flex items-center justify-center gap-3 py-4"
-          >
-            {loading ? (
-              <>
-                <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                <span>Authenticating...</span>
-              </>
-            ) : (
-              <>
-                <span>🔐</span>
-                <span>Access Secure Chat</span>
-              </>
-            )}
-          </button>
+          <div className="pt-2">
+            <button
+              type="submit"
+              disabled={loading || !username.trim() || !password.trim()}
+              className="cypher-btn-primary w-full flex items-center justify-center gap-3 py-4 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {loading ? (
+                <>
+                  <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                  <span>Authenticating...</span>
+                </>
+              ) : (
+                <>
+                  <span>🔐</span>
+                  <span>Access Secure Chat</span>
+                </>
+              )}
+            </button>
+          </div>
         </form>
 
         <div className="mt-8 pt-6 border-t border-gray-800/50">
-          <div className="text-center space-y-3">
-            <div className="flex flex-wrap justify-center gap-2 mb-2">
-              {ALLOWED_USERS.map((user) => (
-                <span 
-                  key={user.username}
-                  className={`px-2 py-1 rounded text-xs ${selectedUser === user.username ? 'bg-gray-800 text-white' : 'bg-gray-900/50 text-gray-300'}`}
-                >
-                  {user.username}
-                  {user.role === 'admin' && ' 👑'}
-                </span>
-              ))}
-            </div>
-            <div className="text-gray-400 text-xs">
-              <p className="mb-1">Test credentials (click Quick Login above):</p>
-              <div className="text-gray-500 text-[11px] leading-tight">
-                <p><span className="text-gray-400">Admin:</span> cloud / opwh7js8f2</p>
-                <p><span className="text-gray-400">Users:</span> pazzyne / 1Li3ycKlfu • flux / TwxGOr:064</p>
-                <p><span className="text-gray-400">Guest:</span> Anonymous / opwh7js8f2</p>
+          <div className="text-center space-y-4">
+            <div>
+              <h3 className="text-sm font-medium text-gray-300 mb-3">Authorized Users</h3>
+              <div className="flex flex-wrap justify-center gap-2">
+                {ALLOWED_USERS.map((user) => (
+                  <div 
+                    key={user.username}
+                    className="bg-gray-900/40 border border-gray-800 rounded-lg px-3 py-2"
+                  >
+                    <div className="text-xs text-gray-300">{user.username}</div>
+                    <div className="text-[10px] text-gray-500 mt-1">
+                      Role: <span className={user.role === 'admin' ? 'text-purple-400' : 'text-gray-400'}>
+                        {user.role}
+                      </span>
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
+
+            <div className="text-gray-500 text-xs leading-relaxed">
+              <p className="mb-2">⚠️ Access is restricted to authorized personnel only.</p>
+              <p className="text-gray-600">
+                Contact administrator for credentials. Unauthorized access attempts are logged.
+              </p>
+            </div>
+
             <div className="flex items-center justify-center gap-4 text-xs text-gray-600 flex-wrap">
               <span className="flex items-center gap-1">
                 <span className="w-1 h-1 bg-emerald-500 rounded-full"></span>
-                Encrypted
-              </span>
-              <span className="flex items-center gap-1">
-                <span className="w-1 h-1 bg-purple-500 rounded-full"></span>
-                Private
-              </span>
-              <span className="flex items-center gap-1">
-                <span className="w-1 h-1 bg-blue-500 rounded-full"></span>
-                Secure
+                End-to-end encrypted
               </span>
               <span className="flex items-center gap-1">
                 <span className="w-1 h-1 bg-amber-500 rounded-full"></span>
-                Auto-wipe
+                Auto-wipe on exit
               </span>
             </div>
           </div>
@@ -261,8 +229,8 @@ export default function LoginPage() {
       </div>
 
       <div className="absolute bottom-4 left-0 right-0 text-center">
-        <p className="text-gray-600 text-xs">
-          Messages are stored temporarily in memory • All data wiped on server restart
+        <p className="text-gray-600 text-xs px-4">
+          Strict authentication required • All access attempts are monitored
         </p>
       </div>
     </div>
