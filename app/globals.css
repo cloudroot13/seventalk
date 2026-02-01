@@ -21,11 +21,14 @@
 }
 
 @layer base {
-  /* CORREÇÃO CRÍTICA PARA SCROLL MOBILE */
+  /* 🆕 FIXES CRÍTICOS PARA MOBILE */
   html {
     height: 100%;
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+    touch-action: manipulation;
   }
   
   body {
@@ -37,21 +40,42 @@
     -webkit-overflow-scrolling: touch;
     overscroll-behavior-y: none;
     position: relative;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: pan-y;
   }
 
-  /* MELHORIA: Para Next.js específico */
+  /* 🆕 Remove zoom automático em inputs no iOS */
+  input, textarea, select {
+    font-size: 16px !important;
+    -webkit-appearance: none;
+    border-radius: 0;
+  }
+  
+  /* 🆕 Específico para iOS */
+  @supports (-webkit-touch-callout: none) {
+    input, textarea {
+      font-size: 16px !important;
+    }
+  }
+
+  /* 🆕 Para Safari no iPhone */
+  @media screen and (max-width: 767px) {
+    input, textarea {
+      font-size: 16px !important;
+    }
+  }
+
   #__next {
     height: 100%;
     display: flex;
     flex-direction: column;
   }
 
-  /* PERMITE SCROLL TÁTIL EM TODO O APP */
   * {
-    touch-action: pan-y; /* Permite scroll vertical */
+    touch-action: pan-y;
   }
 
-  /* Scrollbar elegante - APENAS DESKTOP */
+  /* Scrollbar apenas desktop */
   @media (min-width: 768px) {
     ::-webkit-scrollbar {
       width: 8px;
@@ -72,15 +96,18 @@
     }
   }
   
-  /* REMOVE SCROLLBAR NO MOBILE PARA MELHOR EXPERIÊNCIA */
+  /* Remove scrollbar no mobile */
   @media (max-width: 767px) {
     ::-webkit-scrollbar {
       display: none;
     }
     
-    /* iOS Safari específico */
     body {
       -webkit-tap-highlight-color: transparent;
+    }
+    
+    html, body {
+      overscroll-behavior: none;
     }
   }
 
@@ -104,6 +131,18 @@
   
   .cypher-input {
     @apply bg-gray-900/50 border border-gray-700 rounded-xl px-4 py-3 text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500/50 transition-all duration-300;
+    font-size: 16px !important;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+  }
+  
+  @media not all and (min-resolution:.001dpcm) { 
+    @supports (-webkit-appearance:none) {
+      .cypher-input {
+        font-size: 16px !important;
+      }
+    }
   }
   
   .message-bubble {
@@ -115,7 +154,6 @@
     color: rgba(16, 185, 129, 0.1);
   }
 
-  /* CLASSE PARA CONTAINERS SCROLLÁVEIS */
   .scroll-container {
     height: 100%;
     overflow-y: auto;
@@ -137,7 +175,6 @@
     box-shadow: 0 0 20px rgba(139, 92, 246, 0.1);
   }
 
-  /* UTILITÁRIOS PARA SCROLL MOBILE */
   .touch-scroll {
     -webkit-overflow-scrolling: touch;
     overscroll-behavior: contain;
@@ -150,6 +187,26 @@
   
   .no-scrollbar::-webkit-scrollbar {
     display: none;
+  }
+  
+  .no-select {
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    -khtml-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+  }
+  
+  .no-zoom {
+    font-size: 16px !important;
+    max-height: none !important;
+  }
+  
+  .min-h-screen-mobile {
+    min-height: 100vh;
+    min-height: -webkit-fill-available;
+    min-height: fill-available;
   }
 }
 

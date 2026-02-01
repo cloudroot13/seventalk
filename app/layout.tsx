@@ -1,24 +1,28 @@
-import type { Metadata } from 'next'
-import { Inter } from 'next/font/google'
-import './globals.css'
+"use client";
 
-const inter = Inter({ subsets: ['latin'] })
+import { Inter } from "next/font/google";
+import "./globals.css";
 
-export const metadata: Metadata = {
-  title: 'Cypher Chat | Secure & Private',
-  description: 'End-to-end encrypted messaging with auto-delete',
-}
+const inter = Inter({ subsets: ["latin"] });
+
+export const viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1, // 🆕 Impede zoom
+  userScalable: false, // 🆕 Não permite zoom manual
+  viewportFit: 'cover' // 🆕 Melhor para notch/iPhone
+};
 
 export default function RootLayout({
   children,
 }: Readonly<{
-  children: React.ReactNode
+  children: React.ReactNode;
 }>) {
   return (
-    <html lang="pt-BR" className="dark">
-      <body className={`${inter.className} bg-gray-950 text-gray-100 antialiased overflow-hidden`}>
+    <html lang="en" className="no-zoom">
+      <body className={`${inter.className} antialiased`}>
         {children}
       </body>
     </html>
-  )
+  );
 }

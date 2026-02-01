@@ -4,7 +4,6 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import BinaryBackground from '@/src/components/BinaryBackground';
 
-// USUÁRIOS ATUALIZADOS (com Anonymous):
 const ALLOWED_USERS = [
   { username: "pazzyne", password: "1Li3ycKlfu", role: "user" },
   { username: "flux", password: "TwxGOr:064", role: "user" },
@@ -21,7 +20,6 @@ export default function LoginPage() {
   const [selectedUser, setSelectedUser] = useState<string | null>(null);
   const router = useRouter();
 
-  // Verificar se já está logado (redirecionar se sim)
   useEffect(() => {
     const user = sessionStorage.getItem('user');
     if (user) {
@@ -29,7 +27,6 @@ export default function LoginPage() {
     }
   }, [router]);
 
-  // Auto-preencher quando selecionar um usuário
   useEffect(() => {
     if (selectedUser) {
       const user = ALLOWED_USERS.find(u => u.username === selectedUser);
@@ -46,14 +43,11 @@ export default function LoginPage() {
     setError('');
     setLoading(true);
 
-    // Simular delay de rede
     await new Promise(resolve => setTimeout(resolve, 300));
 
-    // DEBUG: Para ver o que está acontecendo
     console.log('=== DEBUG LOGIN ===');
-    console.log('Tentando login:', { username, password });
+    console.log('Input:', { username, password });
     
-    // Buscar usuário (case-insensitive no username, case-sensitive na senha)
     const user = ALLOWED_USERS.find(
       u => u.username.toLowerCase() === username.trim().toLowerCase() && 
            u.password === password
@@ -63,25 +57,11 @@ export default function LoginPage() {
 
     if (user) {
       console.log('✅ Login bem-sucedido para:', user.username);
-      
-      // Salvar no sessionStorage
       sessionStorage.setItem('user', JSON.stringify(user));
-      
-      // Também salvar no localStorage para persistência opcional
       localStorage.setItem('lastLoggedUser', user.username);
-      
-      // Redirecionar para o chat
       router.push('/chat');
     } else {
-      console.log('❌ Login falhou. Verificando cada usuário...');
-      
-      // Debug detalhado
-      ALLOWED_USERS.forEach(u => {
-        const usernameMatch = u.username.toLowerCase() === username.trim().toLowerCase();
-        const passwordMatch = u.password === password;
-        console.log(`${u.username}: usernameMatch=${usernameMatch}, passwordMatch=${passwordMatch}`);
-      });
-      
+      console.log('❌ Login falhou.');
       setError(`Access denied. Invalid credentials.`);
       setLoading(false);
     }
@@ -94,7 +74,6 @@ export default function LoginPage() {
     setError('');
   };
 
-  // Função para copiar senha
   const copyPassword = (password: string) => {
     navigator.clipboard.writeText(password);
     setError('Password copied to clipboard!');
@@ -102,7 +81,7 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 relative overflow-y-auto">
+    <div className="min-h-screen-mobile flex items-center justify-center p-4 relative overflow-y-auto">
       <BinaryBackground />
       
       <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.02)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.02)_1px,transparent_1px)] bg-size-[50px_50px] -z-5"></div>
@@ -120,7 +99,6 @@ export default function LoginPage() {
           </div>
         </div>
 
-        {/* Seletor rápido de usuários */}
         <div className="mb-6">
           <h3 className="text-sm font-medium text-gray-300 mb-3">Quick Login:</h3>
           <div className="grid grid-cols-2 gap-2">
@@ -152,7 +130,7 @@ export default function LoginPage() {
                   setUsername(e.target.value);
                   setSelectedUser(null);
                 }}
-                className="cypher-input w-full"
+                className="cypher-input w-full no-zoom"
                 placeholder="Enter username"
                 required
               />
@@ -175,14 +153,13 @@ export default function LoginPage() {
                 type={showPasswords ? "text" : "password"}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="cypher-input w-full"
+                className="cypher-input w-full no-zoom"
                 placeholder="Enter password"
                 required
               />
             </div>
           </div>
 
-          {/* Mostrar senhas se ativado */}
           {showPasswords && (
             <div className="bg-gray-900/30 border border-gray-800/50 rounded-xl p-4">
               <h4 className="text-sm font-medium text-gray-300 mb-2">Available Passwords:</h4>
@@ -283,7 +260,6 @@ export default function LoginPage() {
         </div>
       </div>
 
-      {/* Footer */}
       <div className="absolute bottom-4 left-0 right-0 text-center">
         <p className="text-gray-600 text-xs">
           Messages are stored temporarily in memory • All data wiped on server restart
